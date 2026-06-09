@@ -2,12 +2,13 @@ import tweepy
 import anthropic
 import random
 import requests
+import time
+import os
+import json
 
 # ============================================
 # NØKLER
 # ============================================
-import os
-
 API_KEY = os.environ.get("API_KEY")
 API_SECRET = os.environ.get("API_SECRET")
 ACCESS_TOKEN = os.environ.get("ACCESS_TOKEN")
@@ -16,13 +17,15 @@ BEARER_TOKEN = os.environ.get("BEARER_TOKEN")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY")
 
+SEEN_FILE = "seen_headlines.json"
+
 # ============================================
 # HENT NYHETER
 # ============================================
 def get_news():
     url = "https://newsapi.org/v2/everything"
     params = {
-        "q": "stocks OR market OR investing OR nasdaq OR fed OR inflation",
+        "q": "stocks OR market OR investing OR nasdaq OR fed OR inflation OR earnings",
         "language": "en",
         "sortBy": "publishedAt",
         "pageSize": 20,
@@ -32,9 +35,28 @@ def get_news():
     data = response.json()
     headlines = []
     if data.get("articles"):
-        for article in data["articles"][:10]:
+        for article in data["articles"][:20]:
             headlines.append(article["title"])
     return headlines
+
+# ============================================
+# SJEKK OM NYHET ER NY
+# ============================================
+def load_seen():
+    if os.path.exists(SEEN_FILE):
+        with open(SEEN_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+def save_seen(seen):
+    with open(SEEN_FILE, "w") as f:
+        json.dump(seen[-100:], f)
+
+def get_new_headlines():
+    all_headlines = get_news()
+    seen = load_seen()
+    new = [h for h in all_headlines if h not in seen]
+    return new, seen
 
 # ============================================
 # GENERER TWEET
@@ -86,18 +108,25 @@ def post_tweet(text):
     print(f"Posted: {text}")
 
 # ============================================
-# KJØR
+# HOVEDLØKKE
 # ============================================
-def run_bot():
-    headlines = get_news()
-    if not headlines:
-        print("No headlines found")
-        return
-    headline = random.choice(headlines)
-    print(f"Using headline: {headline}")
-    tweet = generate_tweet(headline)
-    print(f"Generated tweet: {tweet}")
-    post_tweet(tweet)
+def run():
+    print("Bot started — checking for news every 15 minutes...")
+    while True:
+        try:
+            new_headlines, seen = get_new_headlines()
+            if new_headlines:
+                headline = new_headlines[0]
+                print(f"New headline: {headline}")
+                tweet = generate_tweet(headline)
+                post_tweet(tweet)
+                seen.append(headline)
+                save_seen(seen)
+            else:
+                print("No new headlines.")
+        except Exception as e:
+            print(f"Error: {e}")
+        time.sleep(900)  # 15 minutter
 
 if __name__ == "__main__":
-    run_bot()
+    run()
