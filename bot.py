@@ -4,6 +4,7 @@ import random
 import requests
 import time
 import os
+import feedparser
 
 # ============================================
 # NØKLER
@@ -14,29 +15,28 @@ ACCESS_TOKEN = os.environ.get("ACCESS_TOKEN")
 ACCESS_TOKEN_SECRET = os.environ.get("ACCESS_TOKEN_SECRET")
 BEARER_TOKEN = os.environ.get("BEARER_TOKEN")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
-NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY")
 
-# Holder styr på sette nyheter i minnet (nullstilles bare ved restart)
+# Holder styr på sette nyheter i minnet
 seen_headlines = set()
 
 # ============================================
-# HENT NYHETER
+# HENT NYHETER VIA RSS
 # ============================================
 def get_news():
-    url = "https://newsapi.org/v2/everything"
-    params = {
-        "q": "stocks OR market OR investing OR nasdaq OR fed OR inflation OR earnings",
-        "language": "en",
-        "sortBy": "publishedAt",
-        "pageSize": 20,
-        "apiKey": NEWSAPI_KEY
-    }
-    response = requests.get(url, params=params)
-    data = response.json()
     headlines = []
-    if data.get("articles"):
-        for article in data["articles"][:20]:
-            headlines.append(article["title"])
+    feeds = [
+        "https://feeds.reuters.com/reuters/businessNews",
+        "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml",
+        "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",
+    ]
+    for feed_url in feeds:
+        try:
+            feed = feedparser.parse(feed_url)
+            for entry in feed.entries[:5]:
+                headlines.append(entry.title)
+        except Exception as e:
+            print(f"Feed error: {e}")
+    print(f"Fetched {len(headlines)} headlines total")
     return headlines
 
 # ============================================
@@ -95,14 +95,13 @@ def run():
     global seen_headlines
     print("Bot started — checking for news every 15 minutes...")
 
-    # Ved oppstart — last inn eksisterende nyheter uten å poste
     print("Loading existing headlines on startup...")
     existing = get_news()
     seen_headlines = set(existing)
     print(f"Loaded {len(seen_headlines)} existing headlines. Now watching for new ones...")
 
     while True:
-        time.sleep(900)  # Vent 15 min
+        time.sleep(900)
         try:
             all_headlines = get_news()
             new = [h for h in all_headlines if h not in seen_headlines]
