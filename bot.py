@@ -16,7 +16,6 @@ ACCESS_TOKEN_SECRET = os.environ.get("ACCESS_TOKEN_SECRET")
 BEARER_TOKEN = os.environ.get("BEARER_TOKEN")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 
-# Holder styr på sette nyheter i minnet
 seen_headlines = set()
 
 # ============================================
@@ -112,7 +111,11 @@ def run():
                 post_tweet(tweet)
                 seen_headlines.add(headline)
             else:
-                print("No new headlines.")
+                print("No new headlines — posting best existing headline.")
+                if all_headlines:
+                    headline = random.choice(all_headlines)
+                    tweet = generate_tweet(headline)
+                    post_tweet(tweet)
         except Exception as e:
             print(f"Error: {e}")
 
