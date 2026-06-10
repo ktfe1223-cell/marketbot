@@ -4,7 +4,6 @@ import random
 import requests
 import time
 import os
-import json
 
 # ============================================
 # NØKLER
@@ -17,7 +16,8 @@ BEARER_TOKEN = os.environ.get("BEARER_TOKEN")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY")
 
-SEEN_FILE = "seen_headlines.json"
+# Holder styr på sette nyheter i minnet (nullstilles bare ved restart)
+seen_headlines = set()
 
 # ============================================
 # HENT NYHETER
@@ -38,25 +38,6 @@ def get_news():
         for article in data["articles"][:20]:
             headlines.append(article["title"])
     return headlines
-
-# ============================================
-# SJEKK OM NYHET ER NY
-# ============================================
-def load_seen():
-    if os.path.exists(SEEN_FILE):
-        with open(SEEN_FILE, "r") as f:
-            return json.load(f)
-    return []
-
-def save_seen(seen):
-    with open(SEEN_FILE, "w") as f:
-        json.dump(seen[-100:], f)
-
-def get_new_headlines():
-    all_headlines = get_news()
-    seen = load_seen()
-    new = [h for h in all_headlines if h not in seen]
-    return new, seen
 
 # ============================================
 # GENERER TWEET
@@ -111,22 +92,30 @@ def post_tweet(text):
 # HOVEDLØKKE
 # ============================================
 def run():
+    global seen_headlines
     print("Bot started — checking for news every 15 minutes...")
+
+    # Ved oppstart — last inn eksisterende nyheter uten å poste
+    print("Loading existing headlines on startup...")
+    existing = get_news()
+    seen_headlines = set(existing)
+    print(f"Loaded {len(seen_headlines)} existing headlines. Now watching for new ones...")
+
     while True:
+        time.sleep(900)  # Vent 15 min
         try:
-            new_headlines, seen = get_new_headlines()
-            if new_headlines:
-                headline = new_headlines[0]
+            all_headlines = get_news()
+            new = [h for h in all_headlines if h not in seen_headlines]
+            if new:
+                headline = new[0]
                 print(f"New headline: {headline}")
                 tweet = generate_tweet(headline)
                 post_tweet(tweet)
-                seen.append(headline)
-                save_seen(seen)
+                seen_headlines.add(headline)
             else:
                 print("No new headlines.")
         except Exception as e:
             print(f"Error: {e}")
-        time.sleep(900)  # 15 minutter
 
 if __name__ == "__main__":
     run()
